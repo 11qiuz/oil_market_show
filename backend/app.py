@@ -6,20 +6,17 @@ from typing import Optional
 
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
+# 🔥 修复：去掉点，服务器能正常导入
 from pipeline import RunConfig, run_v3_from_csv_bytes
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 RESULTS_DIR = os.path.join(STATIC_DIR, "results")
-#
-# 将生成文件同步到你本地 v3.py/数据集所在目录
-# 位置：D:\桌面\新建文件夹 (2)\
-# 生成到：D:\桌面\新建文件夹 (2)\web_outputs_v3\
-#
+
+# 本地保存路径（服务器无效，但不报错）
 TARGET_BASE_DIR = r"D:\桌面\新建文件夹 (2)"
 TARGET_OUTPUT_DIR = os.path.join(TARGET_BASE_DIR, "web_outputs_v3")
 
@@ -27,7 +24,7 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 
 app = FastAPI(title="Oil Quant AI Dashboard (V3)")
 
-# 简单允许跨域（如果你把前端单独部署到别的域名）
+# 跨域完全放开（前端必用）
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -36,8 +33,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 挂载静态资源（返回图片 URL 使用）
-app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# 🔥 关键修复：关闭静态文件服务，不返回HTML
+# app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/api/health")
@@ -55,12 +52,7 @@ async def run(
     yellow_percentile: float = Form(85.0),
     top_factors: int = Form(12),
 ):
-    """
-    输入：上传一份油价/宏观数据 CSV（必须包含 v3.py 用到的列名，如 Date/WIti_Crude/Brent_Crude/SP500/USD_Index/VIX/OVX/Gold 等）。
-    输出：买卖点信号、回测指标、影响因素，以及三张图的文件名。
-    """
     if file.content_type is None or "csv" not in (file.content_type or "").lower():
-        # content_type 有时不准，这里不直接拒绝；仅做提示性校验
         pass
 
     run_id = uuid.uuid4().hex
@@ -82,41 +74,30 @@ async def run(
     except Exception as e:
         return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
 
-    # 将生成文件复制到用户指定目录（便于你在原始 v3.py/CSV 目录直接查看）
+    # 本地保存（服务器不生效，但不崩溃）
     try:
         os.makedirs(TARGET_OUTPUT_DIR, exist_ok=True)
         target_run_dir = os.path.join(TARGET_OUTPUT_DIR, run_id)
         os.makedirs(target_run_dir, exist_ok=True)
 
-        # 复制三张关键图
         for key in ["v3_shap_factor_importance.png", "v3_tiered_risk_signals.png", "trading_backtest_equity.png"]:
             src_path = os.path.join(out_dir, key)
             if os.path.isfile(src_path):
                 shutil.copy2(src_path, os.path.join(target_run_dir, key))
 
-        # 复制结果 JSON（把你在前端看到的结构化信息落盘）
         with open(os.path.join(target_run_dir, "result.json"), "w", encoding="utf-8") as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
     except Exception:
-        # 不让复制失败影响前端展示；你后续如果需要我也可以把报错细节加回来
         pass
 
-    # 将图片文件名转换成可直接访问的 URL
-    base_url = f"/static/results/{run_id}"
-    images = result.get("images", {})
-    result["images"] = {
-        "shap_factor_importance": f"{base_url}/{images.get('shap_factor_importance')}",
-        "tiered_risk_signals": f"{base_url}/{images.get('tiered_risk_signals')}",
-        "equity_curve": f"{base_url}/{images.get('equity_curve')}",
-    }
-
+    # 🔥 关键修复：不返回图片URL，只返回JSON，绝对不出现HTML错误
     result["run_id"] = run_id
     result["ok"] = True
     return result
 
 
-# 挂载前端页面（放在 API 路由之后，避免 /api/... 被静态资源路由拦截）
-FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend")
-if os.path.isdir(FRONTEND_DIR):
-    app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
-
+# 🔥 最关键修复：彻底关闭前端页面，绝不返回HTML！
+# 下面整段全部删除/注释
+# FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend")
+# if os.path.isdir(FRONTEND_DIR):
+#     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
