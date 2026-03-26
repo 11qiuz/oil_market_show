@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
-from .pipeline import RunConfig, run_v3_from_csv_bytes
+from pipeline import RunConfig, run_v3_from_csv_bytes
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
