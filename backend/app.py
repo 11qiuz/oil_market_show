@@ -6,20 +6,21 @@ from typing import Optional
 
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 
-# 🔥 修复：去掉点，服务器能正常导入
+# 修复：服务器可正常导入（无相对导入错误）
 from pipeline import RunConfig, run_v3_from_csv_bytes
-
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 RESULTS_DIR = os.path.join(STATIC_DIR, "results")
 
-# 本地保存路径（服务器无效，但不报错）
+# 服务器上无效，但不报错、不崩溃
 TARGET_BASE_DIR = r"D:\桌面\新建文件夹 (2)"
 TARGET_OUTPUT_DIR = os.path.join(TARGET_BASE_DIR, "web_outputs_v3")
 
+# 安全创建目录（不会崩溃）
 os.makedirs(RESULTS_DIR, exist_ok=True)
 
 app = FastAPI(title="Oil Quant AI Dashboard (V3)")
@@ -33,15 +34,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 🔥 关键修复：关闭静态文件服务，不返回HTML
-# app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+# ✅ 正常开启静态文件（不冲突、不返回HTML）
+app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
-
+# 健康检查接口
 @app.get("/api/health")
 def health() -> dict:
     return {"ok": True}
 
-
+# 核心分析接口
 @app.post("/api/run")
 async def run(
     file: UploadFile = File(...),
@@ -52,9 +53,6 @@ async def run(
     yellow_percentile: float = Form(85.0),
     top_factors: int = Form(12),
 ):
-    if file.content_type is None or "csv" not in (file.content_type or "").lower():
-        pass
-
     run_id = uuid.uuid4().hex
     out_dir = os.path.join(RESULTS_DIR, run_id)
     os.makedirs(out_dir, exist_ok=True)
@@ -74,7 +72,7 @@ async def run(
     except Exception as e:
         return JSONResponse(status_code=400, content={"ok": False, "error": str(e)})
 
-    # 本地保存（服务器不生效，但不崩溃）
+    # 安全本地保存（服务器不生效，但绝不崩溃）
     try:
         os.makedirs(TARGET_OUTPUT_DIR, exist_ok=True)
         target_run_dir = os.path.join(TARGET_OUTPUT_DIR, run_id)
@@ -90,14 +88,22 @@ async def run(
     except Exception:
         pass
 
-    # 🔥 关键修复：不返回图片URL，只返回JSON，绝对不出现HTML错误
+    # 正常返回图片URL（不冲突、不返回HTML）
+    base_url = f"/static/results/{run_id}"
+    images = result.get("images", {})
+    result["images"] = {
+        "shap_factor_importance": f"{base_url}/{images.get('shap_factor_importance')}",
+        "tiered_risk_signals": f"{base_url}/{images.get('tiered_risk_signals')}",
+        "equity_curve": f"{base_url}/{images.get('equity_curve')}",
+    }
+
     result["run_id"] = run_id
     result["ok"] = True
     return result
 
 
-# 🔥 最关键修复：彻底关闭前端页面，绝不返回HTML！
-# 下面整段全部删除/注释
-# FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend")
-# if os.path.isdir(FRONTEND_DIR):
-#     app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+# ==============================================
+# 🔥 关键：彻底删除前端挂载！永不返回HTML！
+# ==============================================
+# 下面这段 已 完 全 删 除
+# ==============================================
