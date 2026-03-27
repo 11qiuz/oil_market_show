@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
   <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF--8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>油价量化策略仪表盘（V3）</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -233,6 +233,9 @@
       const el = (id) => document.getElementById(id);
       let factorChart = null;
 
+      // 已替换为你的Railway域名，无需再修改
+      const API_BASE = "https://oilmarketshow-production.up.railway.app";
+
       function setMetrics(metrics) {
         const body = el("metricsBody");
         const fmtPct = (v) => (v === null || v === undefined) ? "-" : (Number(v) * 100).toFixed(2) + "%";
@@ -276,7 +279,8 @@
         formData.append("top_factors", el("topFactors").value);
 
         try {
-          const res = await fetch("/api/run", { method: "POST", body: formData });
+          // 已修复：使用完整云端地址
+          const res = await fetch(`${API_BASE}/api/run`, { method: "POST", body: formData });
           const data = await res.json();
           if (!res.ok || !data.ok) {
             throw new Error(data.error || "请求失败");
@@ -298,15 +302,16 @@
 
           setMetrics(data.backtest_metrics);
 
+          // 已修复：图片使用完整域名
           const equityUrl = data.images?.equity_curve;
           if (equityUrl) {
             el("equityImg").style.display = "block";
-            el("equityImg").src = equityUrl;
+            el("equityImg").src = API_BASE + equityUrl;
           }
           const tieredUrl = data.images?.tiered_risk_signals;
           if (tieredUrl) {
             el("tieredImg").style.display = "block";
-            el("tieredImg").src = tieredUrl;
+            el("tieredImg").src = API_BASE + tieredUrl;
           }
 
           el("buyDates").textContent = (data.buy_sell_points.buy_entry_dates?.length ? data.buy_sell_points.buy_entry_dates.join(", ") : "-");
@@ -353,4 +358,3 @@
     </script>
   </body>
 </html>
-
