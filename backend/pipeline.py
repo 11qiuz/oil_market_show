@@ -74,8 +74,9 @@ def run_v3_on_df(
     df["Date"] = pd.to_datetime(df["Date"])
     df.set_index("Date", inplace=True)
     df.sort_index(ascending=True, inplace=True)
-    # 处理缺失：前向填充（与原脚本一致）
-    df.fillna(method="ffill", inplace=True)
+    
+    # 🔥🔥🔥 修复：新版 pandas 兼容，删除 method 参数
+    df.ffill(inplace=True)
 
     # ==========================
     # 2. 特征工程
@@ -460,4 +461,3 @@ def run_v3_from_csv_bytes(
 
     df_raw = pd.read_csv(io.StringIO(csv_text))
     return run_v3_on_df(df_raw=df_raw, config=config, output_dir=output_dir)
-
